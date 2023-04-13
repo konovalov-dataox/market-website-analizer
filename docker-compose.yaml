@@ -1,0 +1,86 @@
+version: "3.3"
+
+
+services:
+
+  redis:
+    container_name: redis
+    restart: always
+    image: redis:latest
+    command: redis-server --requirepass admin
+    volumes:
+      - ./redis_data:/app/data
+    ports:
+      - "6373:6379"
+    expose:
+      - 6373
+
+  sq_aqar_api:
+    container_name: sq_aqar_api
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    command: uvicorn api.api:app --proxy-headers --host 0.0.0.0 --port 8000
+    expose:
+      - 8000
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+    env_file:
+      - .env
+
+  scraper-celery-worker:
+    container_name: scraper-celery-worker
+    build:
+      context: .
+      dockerfile: scraper/Dockerfile
+    command: celery --app scraper.celery_app.scraper_sa_aqar worker --loglevel=info
+    volumes:
+      - ./riyadh_villas:/app/riyadh_villas
+      - ./riyadh_lands:/app/riyadh_lands
+      - ./jeddah_villas:/app/jeddah_villas
+      - ./jeddah_lands:/app/jeddah_lands
+    depends_on:
+      - redis
+    env_file:
+      - .env
+
+  image-downloader:
+    container_name: image-downloader
+    build:
+      context: .
+      dockerfile: image_downloader/Dockerfile
+    command: python image_downloader/image_downloader.py
+    volumes:
+      - ./riyadh_villas:/app/riyadh_villas
+      - ./riyadh_lands:/app/riyadh_lands
+      - ./jeddah_villas:/app/jeddah_villas
+      - ./jeddah_lands:/app/jeddah_lands
+    depends_on:
+      - redis
+    env_file:
+      - .env
+
+  image-analyzer:
+    container_name: image-analyzer
+    build:
+      context: .
+      dockerfile: image_analyzer/Dockerfile
+    command: python image_analyzer/image_analyzer.py
+    volumes:
+      - ./riyadh_villas:/app/riyadh_villas
+      - ./riyadh_lands:/app/riyadh_lands
+      - ./jeddah_villas:/app/jeddah_villas
+      - ./jeddah_lands:/app/jeddah_lands
+    depends_on:
+      - redis
+    env_file:
+      - .env
+
+
+volumes:
+  redis_data:
+  scraper-celery-worker:
+  image-downloader:
+  image-analyzer:
